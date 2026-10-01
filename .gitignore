@@ -1,0 +1,10 @@
+
+# Ignore large AI model files and datasets
+*.pt
+*.h5
+*.weights
+*.tf
+*.onnx
+/datasets/
+/images/
+__pycache__/

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم - التحليل الطبي</title>
+    <style>
+        :root {
+            --primary: #3b82f6; --bg: #f1f5f9; --card: #ffffff; --text: #1e293b;
+            --muted: #64748b; --border: #e2e8f0; --success: #10b981; --danger: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px; }
+
+        .mini-nav { width: 100%; max-width: 900px; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .user-pill { background: var(--card); padding: 8px 16px; border-radius: 50px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+        .status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); }
+        .logout-btn { color: var(--danger); text-decoration: none; font-weight: bold; padding: 8px 16px; border: 1px solid var(--danger); border-radius: 50px; font-size: 0.85rem; }
+
+        .container { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 20px; width: 100%; }
+        .main-card { background: var(--card); border-radius: 25px; padding: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.05); text-align: center; }
+
+        .upload-area { border: 2px dashed var(--border); border-radius: 20px; padding: 40px; cursor: pointer; transition: 0.3s; }
+
+        .comparison-view { display: none; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        @media (max-width: 600px) { .comparison-view { gap: 10px; } }
+
+        .preview-img { width: 100%; height: auto; border-radius: 15px; border: 1px solid var(--border); background: #f8fafc; object-fit: contain; max-height: 350px; }
+        .img-label { display: block; margin-bottom: 8px; font-weight: bold; color: var(--muted); font-size: 0.85rem; }
+
+        .analysis-box { margin-top: 20px; padding: 20px; background: #f0f7ff; border-radius: 15px; text-align: right; border-right: 5px solid var(--primary); }
+        .search-box { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 15px; outline: none; text-align: right; }
+        
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 700px; }
+        th, td { padding: 12px; text-align: right; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        th { color: var(--primary); background: #f8fafc; }
+    </style>
+</head>
+<body>
+
+    <div class="mini-nav">
+        <a href="/logout" class="logout-btn">تسجيل الخروج</a>
+        <div class="user-pill">
+            <div class="status-dot"></div>
+            <span>المستخدم الحالي: <strong>{{ current_user }}</strong></span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="main-card">
+            <div id="upload-zone" class="upload-area" onclick="document.getElementById('file-input').click()">
+                <span style="font-size: 3rem;">📸</span>
+                <p style="color:var(--muted); font-weight:600;">ارفع صورة الأشعة للتحليل</p>
+                <input type="file" id="file-input" style="display:none;" accept="image/*" onchange="processAndCompare(this)">
+            </div>
+
+            <div id="result-zone" class="comparison-view">
+                <div class="img-container">
+                    <span class="img-label">📸 الصورة الأصلية</span>
+                    <img id="img-original" class="preview-img">
+                </div>
+                <div class="img-container">
+                    <span class="img-label">🔬 نتيجة التحليل</span>
+                    <img id="img-result" class="preview-img">
+                </div>
+            </div>
+
+            <div id="analysis-box" class="analysis-box" style="display:none;">
+                <h4>📊 التقرير الطبي المباشر:</h4>
+                <div id="analysis-content" style="line-height: 1.8; margin-top:10px;"></div>
+                <button onclick="location.reload()" style="margin-top:15px; padding:8px 20px; cursor:pointer; border:none; background:var(--primary); color:white; border-radius:8px; font-weight:bold; width:100%;">فحص جديد</button>
+            </div>
+        </div>
+
+        <div class="main-card">
+            <h3 style="text-align:right; margin-bottom:15px;">📋 سجل الفحوصات الطبية</h3>
+            <input type="text" id="search-input" class="search-box" onkeyup="searchTable()" placeholder="ابحث باسم الصورة، العظمة، أو الحالة...">
+            
+            <div class="table-responsive">
+                <table id="history-table">
+                    <thead>
+                        <tr>
+                            <th>اسم الصورة</th> <th>مكان العظمة</th>
+                            <th>الحالة</th>
+                            <th>الخطورة</th>
+                            <th>القطر</th>
+                            <th>التاريخ</th>
+                            <th>التقرير</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in detections %}
+                        <tr>
+                            <td class="file-name-cell" style="font-size:0.85rem; font-weight:bold; color:var(--muted);">{{ row[3] }}</td>
+                            <td class="region-cell" style="font-weight:bold;">{{ row[6] }}</td>
+                            <td class="status-cell" style="color: {{ 'var(--success)' if 'سليم' in row[5] else 'var(--danger)' }}; font-weight:bold;">{{ row[5] }}</td>
+                            <td>{{ row[7] }}%</td>
+                            <td style="color:var(--danger); font-weight:bold;">{{ row[8] }} سم</td>
+                            <td><small>{{ row[9] }}</small></td>
+                            <td><a href="/static/uploads/{{ row[4] }}" target="_blank">👁️</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    async function processAndCompare(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        document.getElementById('img-original').src = URL.createObjectURL(file);
+        document.getElementById('img-result').src = ""; 
+        document.getElementById('upload-zone').style.display = 'none';
+        document.getElementById('result-zone').style.display = 'grid';
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/predict', { method: 'POST', body: formData });
+            const data = await response.json();
+
+            const analysisBox = document.getElementById('analysis-box');
+            const analysisContent = document.getElementById('analysis-content');
+
+            if (data.status === "success") {
+                const resPath = '/static/uploads/' + data.result_image;
+                document.getElementById('img-result').src = resPath;
+                analysisBox.style.display = 'block';
+                analysisBox.style.borderRight = '5px solid var(--primary)';
+                
+                analysisContent.innerHTML = `
+                    <div><b>مكان العظمة:</b> ${data.region} | <b>الحالة:</b> ${data.result_text}</div>
+                    <div><b>الخطورة:</b> ${data.severity}% | <b>القطر:</b> <span style="color:red; font-weight:bold;">${data.diameter} سم</span></div>
+                `;
+
+                const table = document.querySelector("#history-table tbody");
+                const row = table.insertRow(0);
+                const color = (data.result_text.includes('سليم')) ? 'var(--success)' : 'var(--danger)';
+                row.innerHTML = `
+                    <td class="file-name-cell" style="font-size:0.85rem; font-weight:bold; color:var(--muted);">${file.name}</td>
+                    <td class="region-cell" style="font-weight:bold;">${data.region}</td>
+                    <td class="status-cell" style="color:${color}; font-weight:bold;">${data.result_text}</td>
+                    <td>${data.severity}%</td>
+                    <td style="color:var(--danger); font-weight:bold;">${data.diameter} سم</td>
+                    <td>الآن</td>
+                    <td><a href="${resPath}" target="_blank">👁️</a></td>`;
+            } else {
+                analysisBox.style.display = 'block';
+                analysisBox.style.borderRight = '5px solid var(--danger)';
+                analysisContent.innerHTML = `<div style="color:var(--danger); font-weight:bold;">⚠️ تنبيه: ${data.message}</div>`;
+            }
+        } catch (e) { alert("حدث خطأ في الاتصال"); }
+    }
+
+    function searchTable() {
+        let filter = document.getElementById("search-input").value.toLowerCase();
+        let rows = document.querySelectorAll("#history-table tbody tr");
+        rows.forEach(r => {
+            let fileName = r.querySelector(".file-name-cell").innerText.toLowerCase();
+            let region = r.querySelector(".region-cell").innerText.toLowerCase();
+            let status = r.querySelector(".status-cell").innerText.toLowerCase();
+            
+            if (fileName.includes(filter) || region.includes(filter) || status.includes(filter)) {
+                r.style.display = "";
+            } else {
+                r.style.display = "none";
+            }
+        });
+    }
+    </script>
+</body>
+</html>
